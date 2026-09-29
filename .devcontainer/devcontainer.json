@@ -5,8 +5,10 @@
   "portsAttributes": {
     "7860": {
       "label": "Private Photo Studio",
-      "onAutoForward": "openBrowser"
+      "onAutoForward": "openBrowser",
+      "visibility": "private"
     }
   },
-  "postCreateCommand": "pip install -r requirements.txt"
+  "postCreateCommand": "pip install -r requirements.txt",
+  "postStartCommand": "bash -lc 'nohup python app.py > /tmp/private-photo-studio.log 2>&1 &'"
 }
