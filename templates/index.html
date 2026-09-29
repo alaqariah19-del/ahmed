@@ -1,35 +1,105 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Private Photo Studio</title>
-  <link rel="stylesheet" href="/static/style.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Private Photo Studio</title><link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header class="top"><div><small>PRIVATE PHOTO STUDIO</small><h1>استوديو الصور</h1><p>واجهة موحدة تعمل داخل GitHub Codespaces.</p></div><span class="pill">محلي</span></header>
-<nav class="tabs"><button class="active" data-tab="faces">تبديل الوجوه</button><button data-tab="pose">نقل الوضعية</button><button data-tab="enhance">تحسين الجودة</button><button data-tab="edit">تحرير وتركيب</button><button data-tab="describe">وصف الصور</button><button data-tab="recover">استرجاع الصور</button></nav>
+<header class="top">
+  <div><small>PRIVATE PHOTO STUDIO</small><h1>استوديو الصور المتقدم</h1><p>معالجة محلية متعددة المحركات داخل GitHub Codespaces.</p></div>
+  <div><span class="pill">LOCAL AI</span><button id="health" class="secondary">فحص المحركات</button></div>
+</header>
+<nav class="tabs">
+  <button class="active" data-tab="faces">تبديل الوجوه</button>
+  <button data-tab="enhance">جودة فائقة</button>
+  <button data-tab="pose">نقل الوضعية</button>
+  <button data-tab="edit">تحرير وتركيب</button>
+  <button data-tab="describe">وصف الصور</button>
+  <button data-tab="recover">استرجاع الصور</button>
+</nav>
 <main>
 <section id="faces" class="panel active">
-  <div class="hero"><div><span>01</span><h2>مرجع واحد ← عدة مستهدفين</h2><p>ارفع صورة مرجعية ثم عدة صور مستهدفة. كل نتيجة تظهر منفصلة.</p></div></div>
+  <div class="hero"><span>01</span><h2>وجه مرجعي ← عدة صور مستهدفة</h2><p>جودة قياسية أو عالية أو فائقة، مع Pixel Boost ومُحسّن وجه وSuper Resolution عند توفر المحرك.</p></div>
   <div class="grid2">
-    <label class="drop"><b>صورة الوجه المرجعي</b><input id="reference" type="file" accept="image/*"><span>اختر صورة واحدة</span></label>
+    <label class="drop"><b>الصورة المرجعية</b><input id="reference" type="file" accept="image/*"><span>صورة واحدة؛ إن احتوت عدة وجوه استخدم ترتيب وجه المرجع</span></label>
     <label class="drop"><b>الصور المستهدفة</b><input id="targets" type="file" accept="image/*" multiple><span>حتى 8 صور</span></label>
   </div>
-  <div class="controls"><label>النموذج<select id="model"><option>inswapper_128_fp16</option><option>hyperswap_1a_256</option><option>hyperswap_1b_256</option><option>ghost_1_256</option><option>uniface_256</option></select></label><label>ترتيب الوجوه<select id="order"><option value="left-right">يسار ← يمين</option><option value="right-left">يمين ← يسار</option><option value="top-bottom">أعلى ← أسفل</option><option value="large-small">الأكبر ← الأصغر</option></select></label><button id="swap" class="primary">تشغيل تبديل الوجوه</button></div>
+  <div class="controls">
+    <label>نموذج تبديل الوجه<select id="model"><option value="hyperswap_1a_256">HyperSwap 1A</option><option value="hyperswap_1b_256">HyperSwap 1B</option><option value="hyperswap_1c_256">HyperSwap 1C</option><option value="inswapper_128_fp16">InSwapper FP16</option><option value="ghost_1_256">Ghost 1</option><option value="uniface_256">UniFace</option></select></label>
+    <label>ترتيب وجوه المستهدف<select id="order"><option value="left-right">يسار ← يمين</option><option value="right-left">يمين ← يسار</option><option value="top-bottom">أعلى ← أسفل</option><option value="large-small">الأكبر ← الأصغر</option></select></label>
+    <label>رقم وجه المرجع داخل الصورة<select id="reference_position"><option value="0">الوجه الأول</option><option value="1">الوجه الثاني</option><option value="2">الوجه الثالث</option><option value="3">الوجه الرابع</option></select></label>
+    <label>المعالج<select id="provider"><option value="auto">تلقائي</option><option value="cuda">NVIDIA CUDA</option><option value="tensorrt">NVIDIA TensorRT</option><option value="directml">DirectML</option><option value="rocm">AMD ROCm</option><option value="openvino">Intel OpenVINO</option><option value="cpu">CPU</option></select></label>
+    <label>جودة الناتج<select id="quality"><option value="standard">قياسية</option><option value="high">عالية</option><option value="ultra" selected>فائقة</option></select></label>
+    <button id="swap" class="primary">تشغيل المعالجة</button>
+  </div>
   <div id="faceStatus" class="status"></div><div id="results" class="results"></div>
 </section>
-<section id="pose" class="panel"><h2>نقل الوضعية</h2><div class="grid2"><label class="drop"><b>الصورة المرجعية</b><input type="file" accept="image/*"><span>مرجع الوضعية</span></label><label class="drop"><b>الصور المستهدفة</b><input type="file" accept="image/*" multiple><span>عدة صور</span></label></div><div class="notice">واجهة نقل الوضعية جاهزة، لكن محرك Pose/ControlNet المحلي لم يتم تثبيته بعد داخل الـCodespace.</div></section>
-<section id="enhance" class="panel"><h2>تحسين الجودة</h2><label class="drop"><b>اختر الصور</b><input id="enhanceFiles" type="file" accept="image/*" multiple><span>Real-ESRGAN محلي عند توصيله</span></label><div class="notice">سيتم تفعيل المعالجة بعد ربط Real-ESRGAN أو محرك تحسين محلي.</div></section>
-<section id="edit" class="panel"><h2>تحرير وتركيب</h2><div class="editor"><div class="canvas">منطقة العمل</div><div class="side"><button>رفع صورة</button><button>طبقة جديدة</button><button>قناع</button><button>قص وتدوير</button><button>استبدال الخلفية</button></div></div><div class="notice">الواجهة الأساسية موجودة، ومحركات التحرير التوليدي يمكن إضافتها عبر ComfyUI محليًا.</div></section>
-<section id="describe" class="panel"><h2>وصف الصور</h2><label class="drop"><b>اختر الصور</b><input id="describeFiles" type="file" accept="image/*" multiple><span>وصف بصري مفصل</span></label><button id="describeBtn" class="primary">وصف الصور</button><div id="describeStatus" class="status"></div></section>
-<section id="recover" class="panel"><h2>استرجاع الصور المحذوفة</h2><div class="notice">هذه الوظيفة تحتاج وصولًا مباشرًا إلى وسيط التخزين. GitHub Codespaces لا يستطيع فحص هارد الكمبيوتر أو USB المتصل بجهازك. استخدم PhotoRec/TestDisk محليًا على الجهاز أو Runner متصل بالقرص.</div></section>
+
+<section id="enhance" class="panel">
+  <div class="hero"><span>02</span><h2>رفع الجودة إلى جودة فائقة</h2><p>Super Resolution حقيقي، مع دعم تحسين الوجه والناتج النهائي، وليس مجرد تكبير عادي.</p></div>
+  <div class="grid2">
+    <label class="drop"><b>الصور</b><input id="enhanceFiles" type="file" accept="image/*" multiple><span>حتى 8 صور</span></label>
+    <div class="qualityCards"><div><b>2×</b><span>سريع</span></div><div><b>4×</b><span>فائق</span></div><div><b>8×</b><span>Ultra عند توفر الموارد</span></div></div>
+  </div>
+  <div class="controls"><label>الوضع<select id="enhanceQuality"><option value="standard">2×</option><option value="high">4× عالي</option><option value="ultra">4× فائـق</option></select></label><button id="enhanceBtn" class="primary">تحسين الصور</button></div>
+  <div id="enhanceStatus" class="status"></div><div id="enhanceResults" class="results"></div>
+</section>
+
+<section id="pose" class="panel">
+  <div class="hero"><span>03</span><h2>نقل الوضعية</h2><p>مرجع واحد ← عدة مستهدفين. الواجهة مجهزة للربط مع Pose/ControlNet محلي.</p></div>
+  <div class="grid2"><label class="drop"><b>الصورة المرجعية</b><input type="file" accept="image/*"><span>صورة وضعية</span></label><label class="drop"><b>الصور المستهدفة</b><input type="file" accept="image/*" multiple><span>عدة صور</span></label></div>
+  <div class="notice">المحرك لم يُفعّل بعد؛ لن يظهر زر تنفيذ وهمي قبل تركيب نموذج Pose/ControlNet فعليًا.</div>
+</section>
+
+<section id="edit" class="panel">
+  <div class="hero"><span>04</span><h2>تحرير وتركيب متقدم</h2><p>طبقات، أقنعة، إزالة عناصر، تغيير خلفية، inpainting وoutpainting عبر طبقة ComfyUI محلية عند تفعيلها.</p></div>
+  <div class="editor"><div class="canvas">منطقة العمل</div><div class="side"><button>رفع صورة</button><button>طبقة جديدة</button><button>قناع</button><button>قص وتدوير</button><button>منظور</button><button>استبدال الخلفية</button></div></div>
+  <div class="notice">هذه الواجهة جاهزة لطبقة ComfyUI، لكن محرك التوليد لن يُعتبر مفعلًا قبل تشغيله وربط Workflow فعلي.</div>
+</section>
+
+<section id="describe" class="panel">
+  <div class="hero"><span>05</span><h2>وصف الصور بالتفصيل</h2><p>يدعم نموذج رؤية محلي عبر Ollama عند تفعيله.</p></div>
+  <label class="drop"><b>اختر الصور</b><input id="describeFiles" type="file" accept="image/*" multiple><span>حتى 8 صور</span></label>
+  <textarea id="describePrompt" placeholder="اكتب نوع الوصف المطلوب…"></textarea><button id="describeBtn" class="primary">إنشاء الوصف</button>
+  <div id="describeStatus" class="status"></div><div id="describeResults" class="description-results"></div>
+</section>
+
+<section id="recover" class="panel">
+  <div class="hero"><span>06</span><h2>استرجاع الصور</h2><p>هذه الوظيفة تحتاج وسيط تخزين متاحًا للمحرك.</p></div>
+  <div class="notice">Codespaces لا يرى القرص الداخلي أو USB الموجود في جهازك مباشرة. يمكن ربط Self-Hosted Runner أو تشغيل PhotoRec على جهاز متصل بالقرص.</div>
+</section>
 </main>
+
 <script>
-const tabs=[...document.querySelectorAll('.tabs button')]; const panels=[...document.querySelectorAll('.panel')];
+const tabs=[...document.querySelectorAll('.tabs button')], panels=[...document.querySelectorAll('.panel')];
 tabs.forEach(b=>b.onclick=()=>{tabs.forEach(x=>x.classList.remove('active'));panels.forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.tab).classList.add('active')});
-const status=(el,msg,err=false)=>{el.textContent=msg;el.className='status '+(err?'error':'')};
-document.getElementById('swap').onclick=async()=>{const ref=document.getElementById('reference').files[0], targets=[...document.getElementById('targets').files], s=document.getElementById('faceStatus'); if(!ref||!targets.length){status(s,'اختر الصورة المرجعية والصور المستهدفة.',true);return} const fd=new FormData();fd.append('reference',ref);targets.slice(0,8).forEach(f=>fd.append('targets',f));fd.append('model',document.getElementById('model').value);fd.append('order',document.getElementById('order').value);status(s,'جاري تنفيذ تبديل الوجوه…');try{const r=await fetch('/api/faceswap',{method:'POST',body:fd}),d=await r.json();if(!r.ok)throw Error(d.error||'حدث خطأ');document.getElementById('results').innerHTML=d.results.map(x=>`<article><img src="${x.url}"><a href="${x.url}" download="${x.name}">حفظ النتيجة</a></article>`).join('');status(s,`اكتملت ${d.results.length} نتيجة.`)}catch(e){status(s,e.message,true)}};
-document.getElementById('describeBtn').onclick=async()=>{const fs=document.getElementById('describeFiles').files,s=document.getElementById('describeStatus');if(!fs.length){status(s,'اختر صورة.',true);return}const fd=new FormData();[...fs].forEach(f=>fd.append('images',f));status(s,'جاري التحقق…');const r=await fetch('/api/describe',{method:'POST',body:fd});const d=await r.json();status(s,d.message||d.error,!r.ok)};
+const setStatus=(el,msg,err=false)=>{el.textContent=msg;el.className='status '+(err?'error':'')};
+
+document.getElementById('health').onclick=async()=>{try{const r=await fetch('/api/health'),d=await r.json();alert('FaceFusion: '+(d.facefusion?'جاهز':'غير مثبت')+'\nReal-ESRGAN: '+(d.realesrgan?'جاهز':'عبر FaceFusion/غير مضبوط')+'\nOllama: '+(d.ollama?'جاهز':'غير مضبوط')+'\nComfyUI: '+(d.comfyui?'جاهز':'غير مضبوط'))}catch(e){alert(e.message)}};
+
+document.getElementById('swap').onclick=async()=>{
+ const ref=document.getElementById('reference').files[0], targets=[...document.getElementById('targets').files].slice(0,8), s=document.getElementById('faceStatus');
+ if(!ref||!targets.length){setStatus(s,'اختر المرجع والمستهدفات.',true);return}
+ const fd=new FormData();fd.append('reference',ref);targets.forEach(f=>fd.append('targets',f));
+ fd.append('model',document.getElementById('model').value);fd.append('order',document.getElementById('order').value);fd.append('provider',document.getElementById('provider').value);fd.append('reference_position',document.getElementById('reference_position').value);fd.append('quality',document.getElementById('quality').value);
+ setStatus(s,'جاري تنفيذ المعالجة…');
+ try{const r=await fetch('/api/faceswap',{method:'POST',body:fd}),d=await r.json();if(!r.ok)throw Error(d.error||'حدث خطأ');document.getElementById('results').innerHTML=d.results.map(x=>'<article><img src="'+x.url+'"><a href="'+x.url+'" download="'+x.name+'">حفظ</a></article>').join('');setStatus(s,'اكتملت '+d.results.length+' نتيجة.')}catch(e){setStatus(s,e.message,true)}
+};
+
+document.getElementById('enhanceBtn').onclick=async()=>{
+ const fs=[...document.getElementById('enhanceFiles').files].slice(0,8),s=document.getElementById('enhanceStatus');
+ if(!fs.length){setStatus(s,'اختر الصور.',true);return}
+ const fd=new FormData();fs.forEach(f=>fd.append('images',f));fd.append('quality',document.getElementById('enhanceQuality').value);
+ setStatus(s,'جاري رفع وتحسين الصور…');
+ try{const r=await fetch('/api/enhance',{method:'POST',body:fd}),d=await r.json();if(!r.ok)throw Error(d.error||'فشل التحسين');document.getElementById('enhanceResults').innerHTML=d.results.map(x=>'<article><img src="'+x.url+'"><a href="'+x.url+'" download="'+x.name+'">حفظ</a></article>').join('');setStatus(s,'اكتمل التحسين.')}catch(e){setStatus(s,e.message,true)}
+};
+
+document.getElementById('describeBtn').onclick=async()=>{
+ const fs=[...document.getElementById('describeFiles').files].slice(0,8),s=document.getElementById('describeStatus');
+ if(!fs.length){setStatus(s,'اختر الصور.',true);return}
+ const fd=new FormData();fs.forEach(f=>fd.append('images',f));fd.append('instruction',document.getElementById('describePrompt').value);
+ setStatus(s,'جاري تحليل الصور…');
+ try{const r=await fetch('/api/describe',{method:'POST',body:fd}),d=await r.json();if(!r.ok)throw Error(d.error||'فشل الوصف');document.getElementById('describeResults').innerHTML=d.results.map(x=>'<div><b>'+x.name+'</b><p>'+x.description+'</p></div>').join('');setStatus(s,'تم إنشاء الوصف.')}catch(e){setStatus(s,e.message,true)}
+};
 </script>
 </body></html>
