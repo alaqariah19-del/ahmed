@@ -4,21 +4,37 @@
 
 ## التشغيل
 
-1. افتح المستودع في GitHub.
+1. افتح المستودع.
 2. اختر **Code → Codespaces → Create codespace on main**.
-3. بعد إنشاء الـCodespace شغّل: `python app.py`
-4. افتح المنفذ **7860** من تبويب Ports.
-
-## الوظائف
-
-- تبديل الوجه: وجه مرجعي واحد + عدة صور مستهدفة.
-- اختيار ترتيب مطابقة الوجوه.
-- تحسين الجودة عند توصيل Real-ESRGAN.
-- واجهة موحدة لإضافة نقل الوضعية والتحرير والوصف والتركيب لاحقًا.
-- الصور تبقى داخل بيئة التشغيل ولا تُرفع تلقائيًا لخدمة خارجية.
+3. داخل الـCodespace شغّل:
+   `bash scripts/setup_engines.sh`
+4. بعدها شغّل:
+   `python app.py`
+5. افتح المنفذ **7860**.
 
 ## المحركات
 
-ضع مسار FaceFusion في المتغير `FACEFUSION_DIR` داخل Codespace عند توفره. ويمكن تحديد Real-ESRGAN عبر `REALESRGAN_EXE`.
+- **FaceFusion** لتبديل الوجوه، اختيار الوجه المرجعي، المعالجة الجماعية، Face Enhancement وFrame Enhancement.
+- **Real-ESRGAN** كمسار مستقل اختياري لتحسين الدقة.
+- **Ollama Vision** اختياري لوصف الصور محليًا.
+- **ComfyUI** مخطط له للتحرير التوليدي وinpainting/outpainting ونقل الوضعية.
 
-> ملاحظة: Codespaces العادي لا يضمن GPU. تشغيل FaceFusion قد يكون بطيئًا أو يحتاج Runner مزودًا بـGPU إذا كان النموذج ثقيلًا.
+FaceFusion الحالي يدعم نماذج تبديل متعددة، Pixel Boost حتى 1024×1024، Face Enhancer، وFrame Enhancer مثل Real-ESRGAN ×2/×4/×8، بالإضافة إلى مزودات CPU/CUDA/TensorRT/DirectML/ROCm/OpenVINO. citeturn974479search1turn974479search13turn974479search15turn974479search10
+
+## تبديل الوجوه
+
+الواجهة تدعم:
+- صورة مرجعية واحدة.
+- حتى 8 صور مستهدفة دفعة واحدة.
+- اختيار نموذج تبديل الوجه.
+- اختيار ترتيب الوجوه في الصورة المستهدفة.
+- تحديد أي وجه في صورة المرجع يُستخدم.
+- أوضاع جودة قياسية/عالية/فائقة.
+
+## الجودة الفائقة
+
+الوضع الفائق يركّب Face Swap + Face Enhancer + Frame Enhancer، مع حفظ الناتج بجودة عالية. هذا ليس Resize عاديًا؛ هو خط Super Resolution واستعادة للوجه عند توفر نماذج المحرك. citeturn974479search15
+
+## ملاحظات مهمة
+
+Codespaces العادي لا يضمن GPU. في حالة تشغيل نماذج ثقيلة بدون GPU سيكون الأداء أبطأ. FaceFusion يدعم CUDA وTensorRT على عتاد NVIDIA وخيارات أخرى حسب البيئة. citeturn974479search0turn974479search10
