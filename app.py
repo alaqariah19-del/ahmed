@@ -264,7 +264,8 @@ def enhance():
                     raise RuntimeError("لم يتم تثبيت Real-ESRGAN أو FaceFusion.")
                 entry, cwd = resolved
                 python = os.environ.get("FACEFUSION_PYTHON", "").strip() or shutil.which("python") or shutil.which("python3")
-                cmd = [python, str(entry), "headless-run", "-t", str(src), "-o", str(output), "--processors", "frame_enhancer", "--frame-enhancer-model", "real_esrgan_x4_fp16", "--frame-enhancer-blend", "90", "--output-image-scale", "4", "--output-image-quality", "100"]
+                frame_model = "real_esrgan_x2" if quality == "standard" else "real_esrgan_x4"
+                cmd = [python, str(entry), "headless-run", "-t", str(src), "-o", str(output), "--processors", "frame_enhancer", "--frame-enhancer-model", frame_model, "--frame-enhancer-blend", "90", "--output-image-scale", "1.0", "--output-image-quality", "100", "--execution-providers", "cpu", "--execution-thread-count", "4"]
                 run_command(cmd, cwd)
             results.append({"name": output.name, "url": f"/files/{out_dir.name}/{output.name}"})
         return jsonify(results=results, quality=quality, scale=scale)
