@@ -19,6 +19,17 @@
   <button data-tab="recover">استرجاع الصور</button>
 </nav>
 <main>
+<section id="command" class="panel active">
+  <div class="hero"><span>00</span><h2>أوامر حرة — اكتب ما تريد بالعربي</h2><p>اكتب طلبك بصياغتك الطبيعية؛ الأداة توجهه تلقائيًا للمسار المناسب بدل تقييدك بقائمة أوامر ثابتة.</p></div>
+  <label class="drop"><b>الصور</b><input id="commandFiles" type="file" accept="image/*" multiple><span>حتى 8 صور. في تبديل الوجه: أول صورة مرجع والباقي أهداف.</span></label>
+  <textarea id="commandPrompt" placeholder="مثال: ارفع الجودة إلى أعلى مستوى ممكن مع الحفاظ على التفاصيل الطبيعية..."></textarea>
+  <button id="commandBtn" class="primary">تنفيذ الطلب</button>
+  <div id="commandStatus" class="status"></div>
+  <div id="commandResults" class="results"></div>
+  <div id="commandText" class="description-results"></div>
+</section>
+
+
 <section id="faces" class="panel">
   <div class="hero"><span>01</span><h2>وجه مرجعي ← عدة صور مستهدفة</h2><p>جودة قياسية أو عالية أو فائقة، مع Pixel Boost ومُحسّن وجه وSuper Resolution عند توفر المحرك.</p></div>
   <div class="grid2">
