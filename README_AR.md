@@ -38,3 +38,12 @@ FaceFusion الحالي يدعم نماذج تبديل متعددة، Pixel Boos
 ## ملاحظات مهمة
 
 Codespaces العادي لا يضمن GPU. في حالة تشغيل نماذج ثقيلة بدون GPU سيكون الأداء أبطأ. FaceFusion يدعم CUDA وTensorRT على عتاد NVIDIA وخيارات أخرى حسب البيئة. citeturn974479search0turn974479search10
+
+
+## ربط ComfyUI الفعلي
+
+يمكن تشغيل مسار نقل الوضعية أو التحرير التوليدي عبر Workflow مُصدّر بصيغة API من ComfyUI:
+- ضع Workflow نقل الوضعية في `workflows/pose.json` أو اضبط `POSE_WORKFLOW`.
+- ضع Workflow التحرير في `workflows/edit.json` أو اضبط `EDIT_WORKFLOW`.
+- يقوم التطبيق برفع صور الإدخال إلى ComfyUI، واستبدال أول عقدتي `LoadImage` بالهدف والمرجع، ثم ينتظر الناتج ويحفظه داخل الاستوديو.
+- يجب أن يكون الـWorkflow نفسه مُجهزًا بالنماذج والعقد المناسبة للـPose/ControlNet أو التحرير التوليدي؛ وجود الجسر لا يعني أن النموذج الثقيل مثبت تلقائيًا.
