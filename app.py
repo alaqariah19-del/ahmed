@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import uuid
 from pathlib import Path
-from urllib import request as urlrequest
+from urllib import request as urlrequest, parse
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from werkzeug.utils import secure_filename
@@ -143,6 +143,111 @@ def run_realesrgan(image: Path, output: Path, scale: float, model: str) -> None:
         "--face_enhance",
     ]
     run_command(cmd, Path(script).parent)
+
+
+
+def comfy_url(path: str) -> str:
+    base = os.environ.get("COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/")
+    return base + path
+
+
+def comfy_upload(image: Path) -> str:
+    boundary = "----PrivatePhotoStudio" + uuid.uuid4().hex
+    filename = image.name
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="image"; filename="{filename}"\r\n'
+        f"Content-Type: application/octet-stream\r\n\r\n"
+    ).encode() + image.read_bytes() + f"\r\n--{boundary}--\r\n".encode()
+    req = urlrequest.Request(
+        comfy_url("/upload/image"),
+        data=body,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    with urlrequest.urlopen(req, timeout=180) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    if data.get("name"):
+        return str(data["name"])
+    raise RuntimeError("ComfyUI لم يُرجع اسم الصورة المرفوعة.")
+
+
+def comfy_run_workflow(
+    workflow_path: Path,
+    *,
+    target: Path,
+    reference: Path | None,
+    output: Path,
+) -> None:
+    if not workflow_path.exists():
+        raise RuntimeError(f"Workflow غير موجود: {workflow_path}")
+    with workflow_path.open("r", encoding="utf-8") as fh:
+        workflow = json.load(fh)
+    target_name = comfy_upload(target)
+    reference_name = comfy_upload(reference) if reference else None
+    load_nodes = [
+        (node_id, node)
+        for node_id, node in workflow.items()
+        if isinstance(node, dict) and node.get("class_type") == "LoadImage"
+    ]
+    if not load_nodes:
+        raise RuntimeError("Workflow لا يحتوي على LoadImage.")
+    workflow[load_nodes[0][0]].setdefault("inputs", {})["image"] = target_name
+    if reference_name and len(load_nodes) > 1:
+        workflow[load_nodes[1][0]].setdefault("inputs", {})["image"] = reference_name
+
+    client_id = uuid.uuid4().hex
+    payload = json.dumps({"prompt": workflow, "client_id": client_id}).encode("utf-8")
+    req = urlrequest.Request(
+        comfy_url("/prompt"),
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlrequest.urlopen(req, timeout=180) as resp:
+        queued = json.loads(resp.read().decode("utf-8"))
+    prompt_id = queued.get("prompt_id")
+    if not prompt_id:
+        raise RuntimeError("ComfyUI رفض الـWorkflow.")
+
+    import time
+    deadline = time.time() + float(os.environ.get("COMFYUI_TIMEOUT", "900"))
+    history = None
+    while time.time() < deadline:
+        try:
+            req = urlrequest.Request(comfy_url(f"/history/{prompt_id}"))
+            with urlrequest.urlopen(req, timeout=30) as resp:
+                history = json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            history = None
+        if history and prompt_id in history:
+            break
+        time.sleep(2)
+
+    if not history or prompt_id not in history:
+        raise RuntimeError("انتهت مهلة انتظار ComfyUI دون نتيجة.")
+
+    outputs = history[prompt_id].get("outputs", {})
+    for node in outputs.values():
+        for image_info in node.get("images", []):
+            params = parse.urlencode({
+                "filename": image_info.get("filename", ""),
+                "subfolder": image_info.get("subfolder", ""),
+                "type": image_info.get("type", "output"),
+            })
+            with urlrequest.urlopen(urlrequest.Request(comfy_url("/view?" + params)), timeout=180) as resp:
+                output.write_bytes(resp.read())
+            return
+    raise RuntimeError("Workflow انتهى لكن لم يتم العثور على صورة ناتجة.")
+
+
+def configured_workflow(kind: str) -> Path | None:
+    env_name = "POSE_WORKFLOW" if kind == "pose" else "EDIT_WORKFLOW"
+    configured = os.environ.get(env_name, "").strip()
+    if configured:
+        return Path(configured)
+    fallback = BASE / "workflows" / f"{kind}.json"
+    return fallback if fallback.exists() else None
 
 
 def ollama_describe(image: Path, instruction: str) -> str:
@@ -374,18 +479,34 @@ def command():
                 results.append({"name": output.name, "url": f"/files/{out_dir.name}/{output.name}"})
             return jsonify(operation=operation, results=results, quality=quality)
 
-        if operation == "pose":
-            return jsonify(
-                operation=operation,
-                status="not_configured",
-                error="محرك نقل الوضعية لم يتم ربطه بعد؛ لم أضع تنفيذًا وهميًا.",
-            ), 503
-
-        return jsonify(
-            operation=operation,
-            status="not_configured",
-            error="المحرر التوليدي الحر لم يُربط بمحرك ComfyUI بعد؛ الطلب حُفظ كأمر حر دون تنفيذ وهمي.",
-        ), 503
+        if operation in {"pose", "edit"}:
+            if operation == "pose" and len(files) < 2:
+                return jsonify(error="نقل الوضعية يحتاج صورتين على الأقل: المرجع ثم الهدف."), 400
+            workflow = configured_workflow(operation)
+            if not workflow:
+                return jsonify(
+                    operation=operation,
+                    status="not_configured",
+                    error=f"لم يتم تكوين Workflow لـ {operation}. ضع الملف في workflows/{operation}.json أو اضبط متغير البيئة.",
+                ), 503
+            job = UPLOADS / uuid.uuid4().hex
+            out_dir = OUTPUTS / uuid.uuid4().hex
+            job.mkdir(parents=True)
+            out_dir.mkdir(parents=True)
+            source = save_upload(files[0], job)
+            targets = files[1:] if operation == "pose" else files
+            results = []
+            for i, file in enumerate(targets, start=1):
+                target = save_upload(file, job)
+                output = out_dir / f"{target.stem}_{operation}_{i}.png"
+                comfy_run_workflow(
+                    workflow,
+                    target=target,
+                    reference=source if operation == "pose" else None,
+                    output=output,
+                )
+                results.append({"name": output.name, "url": f"/files/{out_dir.name}/{output.name}"})
+            return jsonify(operation=operation, results=results)
 
 
 @app.get("/files/<folder>/<name>")
