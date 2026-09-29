@@ -9,6 +9,14 @@
       "visibility": "private"
     }
   },
-  "postCreateCommand": "pip install -r requirements.txt",
-  "postStartCommand": "bash -lc 'nohup python app.py > /tmp/private-photo-studio.log 2>&1 &'"
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "remote.autoForwardPorts": true
+      }
+    }
+  },
+  "postCreateCommand": "pip install -r requirements.txt && chmod +x scripts/start_studio.sh",
+  "postStartCommand": "bash scripts/start_studio.sh",
+  "postAttachCommand": "bash scripts/start_studio.sh"
 }
