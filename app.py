@@ -218,7 +218,8 @@ def gemini_edit(images: list[Path], prompt: str, model: str, image_size: str, pr
     kwargs = {
         "model": model or "gemini-3.1-flash-image",
         "input": inputs,
-        "response_format": {"type": "image", "mime_type": "image/png", "image_size": image_size or "2K"},
+        # Gemini's current Interactions API accepts JPEG for image outputs.
+        "response_format": {"type": "image", "mime_type": "image/jpeg", "image_size": image_size or "2K"},
     }
     if previous_interaction_id:
         kwargs["previous_interaction_id"] = previous_interaction_id
@@ -310,7 +311,7 @@ def ai_edit():
         paths = [save_upload(file, job) for file in files]
         image_bytes, interaction_id = gemini_edit(paths, prompt, model, image_size, previous_id)
 
-        output = out_dir / "gemini_edit.png"
+        output = out_dir / "gemini_edit.jpg"
         output.write_bytes(image_bytes)
         return jsonify(
             results=[{"name": output.name, "url": f"/files/{out_dir.name}/{output.name}"}],
