@@ -18,7 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 ARG FACEFUSION_VERSION=3.9.0
 RUN git clone --depth 1 --branch ${FACEFUSION_VERSION} https://github.com/facefusion/facefusion.git /facefusion \
     && cd /facefusion \
-    && python install.py default --skip-conda
+    && python install.py default --skip-conda \
+    && python -m pip install --no-cache-dir "pydantic>=2.12.5,<3" "google-genai"
 
 COPY . /app
 
