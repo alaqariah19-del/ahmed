@@ -290,6 +290,104 @@ def describe():
         return jsonify(error=str(exc)), 500
 
 
+def classify_command(text: str) -> str:
+    t = (text or "").strip().lower()
+    if any(k in t for k in ["تبديل الوجه", "تبديل الوجوه", "face swap", "faceswap", "بدل الوجه"]):
+        return "faceswap"
+    if any(k in t for k in ["رفع الجودة", "جودة فائقة", "تحسين الجودة", "تكبير", "super resolution", "enhance", "تحسين الصورة"]):
+        return "enhance"
+    if any(k in t for k in ["وصف الصورة", "صف الصورة", "حلل الصورة", "وصف", "describe", "caption"]):
+        return "describe"
+    if any(k in t for k in ["نقل الوضعية", "انقل الوضعية", "pose transfer", "pose"]):
+        return "pose"
+    return "edit"
+
+
+@app.post("/api/command")
+def command():
+    try:
+        instruction = request.form.get("instruction", "").strip()
+        files = [f for f in request.files.getlist("images") if f and f.filename]
+        if not instruction:
+            return jsonify(error="اكتب طلبك أولًا."), 400
+        if not files:
+            return jsonify(error="ارفع صورة واحدة على الأقل مع الطلب."), 400
+        if len(files) > 8:
+            return jsonify(error="الحد الأقصى 8 صور في العملية الواحدة."), 400
+
+        operation = classify_command(instruction)
+        if operation == "enhance":
+            quality = "ultra" if any(k in instruction.lower() for k in ["فائق", "فائقة", "ultra", "8x", "8×"]) else "high"
+            job = UPLOADS / uuid.uuid4().hex
+            out_dir = OUTPUTS / uuid.uuid4().hex
+            job.mkdir(parents=True)
+            out_dir.mkdir(parents=True)
+            results = []
+            for file in files:
+                src = save_upload(file, job)
+                output = out_dir / f"{src.stem}_command.png"
+                resolved = find_facefusion()
+                if not resolved:
+                    raise RuntimeError("محرك تحسين الجودة غير مثبت بعد.")
+                entry, cwd = resolved
+                python = shutil.which("python") or shutil.which("python3")
+                cmd = [
+                    python, str(entry), "headless-run",
+                    "-t", str(src), "-o", str(output),
+                    "--processors", "frame_enhancer",
+                    "--frame-enhancer-model", "real_esrgan_x4_fp16" if quality == "ultra" else "real_esrgan_x2_fp16",
+                    "--frame-enhancer-blend", "88",
+                    "--output-image-quality", "100",
+                    "--output-image-scale", "4" if quality == "ultra" else "2",
+                ]
+                run_command(cmd, cwd)
+                results.append({"name": output.name, "url": f"/files/{out_dir.name}/{output.name}"})
+            return jsonify(operation=operation, results=results, quality=quality)
+
+        if operation == "describe":
+            job = UPLOADS / uuid.uuid4().hex
+            job.mkdir(parents=True)
+            results = []
+            for file in files:
+                src = save_upload(file, job)
+                results.append({"name": file.filename, "description": ollama_describe(src, instruction)})
+            return jsonify(operation=operation, results=results)
+
+        if operation == "faceswap":
+            if len(files) < 2:
+                return jsonify(error="لتبديل الوجه: ارفع أولًا الصورة المرجعية ثم صورة/صور الهدف."), 400
+            quality = "ultra" if any(k in instruction.lower() for k in ["فائق", "فائقة", "ultra"]) else "high"
+            job = UPLOADS / uuid.uuid4().hex
+            out_dir = OUTPUTS / uuid.uuid4().hex
+            job.mkdir(parents=True)
+            out_dir.mkdir(parents=True)
+            source = save_upload(files[0], job)
+            results = []
+            for target in files[1:]:
+                target_path = save_upload(target, job)
+                output = out_dir / f"{target_path.stem}_command.png"
+                facefusion_faceswap(
+                    source, target_path, output,
+                    model="hyperswap_1a_256", order="left-right",
+                    reference_position=0, quality=quality, provider="auto",
+                )
+                results.append({"name": output.name, "url": f"/files/{out_dir.name}/{output.name}"})
+            return jsonify(operation=operation, results=results, quality=quality)
+
+        if operation == "pose":
+            return jsonify(
+                operation=operation,
+                status="not_configured",
+                error="محرك نقل الوضعية لم يتم ربطه بعد؛ لم أضع تنفيذًا وهميًا.",
+            ), 503
+
+        return jsonify(
+            operation=operation,
+            status="not_configured",
+            error="المحرر التوليدي الحر لم يُربط بمحرك ComfyUI بعد؛ الطلب حُفظ كأمر حر دون تنفيذ وهمي.",
+        ), 503
+
+
 @app.get("/files/<folder>/<name>")
 def files(folder: str, name: str):
     return send_from_directory(OUTPUTS / Path(folder).name, secure_filename(name), as_attachment=False)
