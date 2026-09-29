@@ -1,0 +1,12 @@
+{
+  "name": "Private Photo Studio",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "forwardPorts": [7860],
+  "portsAttributes": {
+    "7860": {
+      "label": "Private Photo Studio",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "postCreateCommand": "pip install -r requirements.txt"
+}
