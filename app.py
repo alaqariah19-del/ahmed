@@ -77,9 +77,14 @@ def facefusion_faceswap(
         raise RuntimeError("FaceFusion غير مثبت. افتح إعداد المحركات وشغّل إعداد FaceFusion أولًا.")
 
     entry, cwd = resolved
+    conda = shutil.which("conda")
     python = shutil.which("python") or shutil.which("python3")
-    if not python:
-        raise RuntimeError("Python غير متاح.")
+    if conda:
+        runner = [conda, "run", "--no-capture-output", "-n", "facefusion", "python", str(entry)]
+    elif python:
+        runner = [python, str(entry)]
+    else:
+        raise RuntimeError("Python/Conda غير متاحان لتشغيل FaceFusion.")
 
     processors = ["face_swapper"]
     if quality in {"high", "ultra"}:
@@ -87,7 +92,7 @@ def facefusion_faceswap(
     if quality == "ultra":
         processors.append("frame_enhancer")
 
-    cmd = [python, str(entry), "headless-run", "-s", str(source), "-t", str(target), "-o", str(output)]
+    cmd = [*runner, "headless-run", "-s", str(source), "-t", str(target), "-o", str(output)]
     cmd += ["--processors", *processors]
     cmd += [
         "--face-swapper-model", model,
