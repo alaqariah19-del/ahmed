@@ -507,6 +507,10 @@ def command():
                 )
                 results.append({"name": output.name, "url": f"/files/{out_dir.name}/{output.name}"})
             return jsonify(operation=operation, results=results)
+        return jsonify(operation=operation, status="not_configured", error="لا يوجد مسار تنفيذ مناسب لهذا الطلب بعد."), 503
+
+    except Exception as exc:
+        return jsonify(error=str(exc)), 500
 
 
 @app.get("/files/<folder>/<name>")
