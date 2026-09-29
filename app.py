@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import mimetypes
 import os
 import shutil
 import subprocess
@@ -66,7 +67,6 @@ def facefusion_faceswap(source: Path, target: Path, output: Path, *, model: str,
     resolved = find_facefusion()
     if not resolved:
         raise RuntimeError("FaceFusion غير مثبت في خادم التطبيق.")
-
     entry, cwd = resolved
     python = os.environ.get("FACEFUSION_PYTHON", "").strip() or shutil.which("python") or shutil.which("python3")
     if not python:
@@ -78,8 +78,9 @@ def facefusion_faceswap(source: Path, target: Path, output: Path, *, model: str,
     if quality == "ultra":
         processors.append("frame_enhancer")
 
-    cmd = [python, str(entry), "headless-run", "-s", str(source), "-t", str(target), "-o", str(output), "--processors", *processors]
-    cmd += [
+    cmd = [
+        python, str(entry), "headless-run", "-s", str(source), "-t", str(target), "-o", str(output),
+        "--processors", *processors,
         "--face-swapper-model", model,
         "--face-swapper-pixel-boost", "512x512" if quality in {"high", "ultra"} else "256x256",
         "--face-selector-mode", "reference",
@@ -117,7 +118,11 @@ def comfy_url(path: str) -> str:
 
 def comfy_upload(image: Path) -> str:
     boundary = "----PrivatePhotoStudio" + uuid.uuid4().hex
-    body = (f"--{boundary}\r\n" f'Content-Disposition: form-data; name="image"; filename="{image.name}"\r\n' f"Content-Type: application/octet-stream\r\n\r\n").encode() + image.read_bytes() + f"\r\n--{boundary}--\r\n".encode()
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="image"; filename="{image.name}"\r\n'
+        f"Content-Type: application/octet-stream\r\n\r\n"
+    ).encode() + image.read_bytes() + f"\r\n--{boundary}--\r\n".encode()
     req = urlrequest.Request(comfy_url("/upload/image"), data=body, headers={"Content-Type": f"multipart/form-data; boundary={boundary}"}, method="POST")
     with urlrequest.urlopen(req, timeout=180) as resp:
         data = json.loads(resp.read().decode("utf-8"))
@@ -164,7 +169,11 @@ def comfy_run_workflow(workflow_path: Path, *, target: Path, reference: Path | N
     outputs = history[prompt_id].get("outputs", {})
     for node in outputs.values():
         for image_info in node.get("images", []):
-            params = parse.urlencode({"filename": image_info.get("filename", ""), "subfolder": image_info.get("subfolder", ""), "type": image_info.get("type", "output")})
+            params = parse.urlencode({
+                "filename": image_info.get("filename", ""),
+                "subfolder": image_info.get("subfolder", ""),
+                "type": image_info.get("type", "output"),
+            })
             with urlrequest.urlopen(urlrequest.Request(comfy_url("/view?" + params)), timeout=180) as resp:
                 output.write_bytes(resp.read())
             return
@@ -180,10 +189,76 @@ def configured_workflow(kind: str) -> Path | None:
     return fallback if fallback.exists() else None
 
 
+def gemini_available() -> bool:
+    return bool(os.environ.get("GEMINI_API_KEY", "").strip())
+
+
+def gemini_edit(images: list[Path], prompt: str, model: str, image_size: str, previous_interaction_id: str = "") -> tuple[bytes, str]:
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("محرك Gemini غير موصل بعد. أضف GEMINI_API_KEY إلى متغيرات Railway الخاصة بالخدمة.")
+
+    from google import genai
+
+    client = genai.Client(api_key=api_key)
+    instruction = (
+        "نفّذ طلب تحرير الصورة بدقة شديدة. الصورة الأولى هي الصورة الأساسية المراد تحريرها، "
+        "والصور التالية مراجع مساعدة إن وُجدت. حافظ على هوية الأشخاص وملامحهم ونِسَب الجسم "
+        "والمنظور والإضاءة الأصلية ما لم يطلب المستخدم تغييرها صراحة. لا تخترع عناصر خارج الطلب. "
+        "نفّذ التعديلات الواقعية المطلوبة وحافظ على جودة فوتوغرافية طبيعية.\n\n"
+        "طلب المستخدم:\n" + prompt.strip()
+    )
+
+    inputs = [{"type": "text", "text": instruction}]
+    for image in images[:14]:
+        mime = mimetypes.guess_type(image.name)[0] or "image/png"
+        data = base64.b64encode(image.read_bytes()).decode("utf-8")
+        inputs.append({"type": "image", "mime_type": mime, "data": data})
+
+    kwargs = {
+        "model": model or "gemini-3.1-flash-image",
+        "input": inputs,
+        "response_format": {"type": "image", "mime_type": "image/png", "image_size": image_size or "2K"},
+    }
+    if previous_interaction_id:
+        kwargs["previous_interaction_id"] = previous_interaction_id
+
+    interaction = client.interactions.create(**kwargs)
+    output = getattr(interaction, "output_image", None)
+    if not output or not getattr(output, "data", None):
+        raise RuntimeError("Gemini أنهى الطلب بدون صورة ناتجة.")
+    return base64.b64decode(output.data), str(getattr(interaction, "id", "") or "")
+
+
+def gemini_describe(image: Path, instruction: str = "") -> str:
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("محرك Gemini غير موصل بعد.")
+    from google import genai
+    client = genai.Client(api_key=api_key)
+    mime = mimetypes.guess_type(image.name)[0] or "image/png"
+    data = base64.b64encode(image.read_bytes()).decode("utf-8")
+    prompt = instruction.strip() or (
+        "اوصف الصورة بالعربية بدقة شديدة: المشهد، الأشخاص، الرأس والجذع والأطراف، "
+        "الوضعية والاتجاهات والتداخلات المكانية، تعبيرات الوجه، الملابس والخامات، "
+        "الكاميرا والمنظور والإضاءة والخلفية، واذكر فقط ما يظهر فعلًا."
+    )
+    interaction = client.interactions.create(
+        model="gemini-2.5-flash",
+        input=[{"type": "text", "text": prompt}, {"type": "image", "mime_type": mime, "data": data}],
+    )
+    return str(getattr(interaction, "output_text", "") or "").strip()
+
+
 def ollama_describe(image: Path, instruction: str) -> str:
     base_url = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
     model = os.environ.get("OLLAMA_VISION_MODEL", "llava:latest")
-    payload = {"model": model, "prompt": instruction or "اوصف الصورة بالعربية بدقة: المشهد، الأشخاص، الوضعيات، الملابس، الإضاءة، المنظور، الخلفية والتفاصيل المرئية فقط.", "images": [base64.b64encode(image.read_bytes()).decode("ascii")], "stream": False}
+    payload = {
+        "model": model,
+        "prompt": instruction or "اوصف الصورة بالعربية بدقة.",
+        "images": [base64.b64encode(image.read_bytes()).decode("ascii")],
+        "stream": False,
+    }
     data = json.dumps(payload).encode("utf-8")
     req = urlrequest.Request(base_url, data=data, headers={"Content-Type": "application/json"}, method="POST")
     try:
@@ -202,7 +277,48 @@ def index():
 @app.get("/api/health")
 def health():
     ff = find_facefusion()
-    return jsonify(facefusion=bool(ff), realesrgan=bool(os.environ.get("REALESRGAN_SCRIPT")), ollama=bool(os.environ.get("OLLAMA_URL")), comfyui=bool(os.environ.get("COMFYUI_URL")))
+    return jsonify(
+        facefusion=bool(ff),
+        realesrgan=bool(os.environ.get("REALESRGAN_SCRIPT")),
+        ollama=bool(os.environ.get("OLLAMA_URL")),
+        comfyui=bool(os.environ.get("COMFYUI_URL")),
+        gemini=gemini_available(),
+    )
+
+
+@app.post("/api/ai-edit")
+def ai_edit():
+    try:
+        files = [f for f in request.files.getlist("images") if f and f.filename]
+        prompt = request.form.get("prompt", "").strip()
+        if not prompt:
+            return jsonify(error="اكتب طلب التعديل بالتفصيل أولًا."), 400
+        if not files:
+            return jsonify(error="اختر صورة واحدة على الأقل."), 400
+        if len(files) > 14:
+            return jsonify(error="يمكن استخدام حتى 14 صورة مرجعية في جلسة Gemini هذه."), 400
+
+        model = request.form.get("model", "gemini-3.1-flash-image")
+        image_size = request.form.get("image_size", "2K")
+        previous_id = request.form.get("previous_interaction_id", "").strip()
+
+        job = UPLOADS / uuid.uuid4().hex
+        out_dir = OUTPUTS / uuid.uuid4().hex
+        job.mkdir(parents=True)
+        out_dir.mkdir(parents=True)
+
+        paths = [save_upload(file, job) for file in files]
+        image_bytes, interaction_id = gemini_edit(paths, prompt, model, image_size, previous_id)
+
+        output = out_dir / "gemini_edit.png"
+        output.write_bytes(image_bytes)
+        return jsonify(
+            results=[{"name": output.name, "url": f"/files/{out_dir.name}/{output.name}"}],
+            interaction_id=interaction_id,
+            model=model,
+        )
+    except Exception as exc:
+        return jsonify(error=str(exc)), 500
 
 
 @app.post("/api/faceswap")
@@ -264,8 +380,7 @@ def enhance():
                     raise RuntimeError("لم يتم تثبيت Real-ESRGAN أو FaceFusion.")
                 entry, cwd = resolved
                 python = os.environ.get("FACEFUSION_PYTHON", "").strip() or shutil.which("python") or shutil.which("python3")
-                frame_model = "real_esrgan_x2" if quality == "standard" else "real_esrgan_x4"
-                cmd = [python, str(entry), "headless-run", "-t", str(src), "-o", str(output), "--processors", "frame_enhancer", "--frame-enhancer-model", frame_model, "--frame-enhancer-blend", "90", "--output-image-scale", "1.0", "--output-image-quality", "100", "--execution-providers", "cpu", "--execution-thread-count", "4"]
+                cmd = [python, str(entry), "headless-run", "-t", str(src), "-o", str(output), "--processors", "frame_enhancer", "--frame-enhancer-model", "real_esrgan_x4_fp16", "--frame-enhancer-blend", "90", "--output-image-scale", "4", "--output-image-quality", "100"]
                 run_command(cmd, cwd)
             results.append({"name": output.name, "url": f"/files/{out_dir.name}/{output.name}"})
         return jsonify(results=results, quality=quality, scale=scale)
@@ -276,13 +391,15 @@ def enhance():
 @app.post("/api/describe")
 def describe():
     try:
-        image = request.files.get("image")
+        image = request.files.get("image") or (request.files.getlist("images") or [None])[0]
         if not image:
             return jsonify(error="اختر صورة."), 400
         job = UPLOADS / uuid.uuid4().hex
         job.mkdir(parents=True)
         path = save_upload(image, job)
-        return jsonify(description=ollama_describe(path, request.form.get("instruction", "")))
+        if gemini_available():
+            return jsonify(description=gemini_describe(path, request.form.get("instruction", "")), engine="gemini")
+        return jsonify(description=ollama_describe(path, request.form.get("instruction", "")), engine="ollama")
     except Exception as exc:
         return jsonify(error=str(exc)), 500
 
@@ -297,7 +414,7 @@ def operation():
             return jsonify(error="اختر صورًا مستهدفة."), 400
         workflow = configured_workflow(operation)
         if not workflow:
-            return jsonify(operation=operation, status="not_configured", error="لا يوجد مسار تنفيذ مناسب لهذا الطلب بعد."), 503
+            return jsonify(operation=operation, status="not_configured", error="لا يوجد Workflow محلي مفعّل لهذا المسار بعد. استخدم AI Edit (Gemini) للتعديلات العامة."), 503
         job = UPLOADS / uuid.uuid4().hex
         out_dir = OUTPUTS / uuid.uuid4().hex
         job.mkdir(parents=True)
