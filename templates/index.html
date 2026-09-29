@@ -10,6 +10,7 @@
   <div><span class="pill">LOCAL AI</span><button id="health" class="secondary">فحص المحركات</button></div>
 </header>
 <nav class="tabs">
+  <button class="active" data-tab="command">أمر حر</button>
   <button class="active" data-tab="faces">تبديل الوجوه</button>
   <button data-tab="enhance">جودة فائقة</button>
   <button data-tab="pose">نقل الوضعية</button>
@@ -18,7 +19,7 @@
   <button data-tab="recover">استرجاع الصور</button>
 </nav>
 <main>
-<section id="faces" class="panel active">
+<section id="faces" class="panel">
   <div class="hero"><span>01</span><h2>وجه مرجعي ← عدة صور مستهدفة</h2><p>جودة قياسية أو عالية أو فائقة، مع Pixel Boost ومُحسّن وجه وSuper Resolution عند توفر المحرك.</p></div>
   <div class="grid2">
     <label class="drop"><b>الصورة المرجعية</b><input id="reference" type="file" accept="image/*"><span>صورة واحدة؛ إن احتوت عدة وجوه استخدم ترتيب وجه المرجع</span></label>
@@ -74,6 +75,30 @@
 const tabs=[...document.querySelectorAll('.tabs button')], panels=[...document.querySelectorAll('.panel')];
 tabs.forEach(b=>b.onclick=()=>{tabs.forEach(x=>x.classList.remove('active'));panels.forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.tab).classList.add('active')});
 const setStatus=(el,msg,err=false)=>{el.textContent=msg;el.className='status '+(err?'error':'')};
+
+document.getElementById('commandBtn').onclick=async()=>{
+ const fs=[...document.getElementById('commandFiles').files].slice(0,8);
+ const prompt=document.getElementById('commandPrompt').value.trim();
+ const s=document.getElementById('commandStatus');
+ const results=document.getElementById('commandResults');
+ const textBox=document.getElementById('commandText');
+ if(!prompt){setStatus(s,'اكتب طلبك.',true);return}
+ if(!fs.length){setStatus(s,'ارفع صورة واحدة على الأقل.',true);return}
+ const fd=new FormData();fs.forEach(f=>fd.append('images',f));fd.append('instruction',prompt);
+ setStatus(s,'جاري فهم الطلب وتشغيل المحرك المناسب…'); results.innerHTML=''; textBox.innerHTML='';
+ try{
+   const r=await fetch('/api/command',{method:'POST',body:fd});
+   const d=await r.json();
+   if(!r.ok) throw Error(d.error||'لم يكتمل التنفيذ');
+   if(d.results?.some(x=>x.url)){
+      results.innerHTML=d.results.map(x=>x.url?'<article><img src="'+x.url+'"><a href="'+x.url+'" download="'+x.name+'">حفظ</a></article>':'').join('');
+   }
+   if(d.results?.some(x=>x.description)){
+      textBox.innerHTML=d.results.map(x=>'<div><b>'+x.name+'</b><p>'+x.description+'</p></div>').join('');
+   }
+   setStatus(s,'اكتمل الطلب ('+d.operation+').');
+ }catch(e){setStatus(s,e.message,true)}
+};
 
 document.getElementById('health').onclick=async()=>{try{const r=await fetch('/api/health'),d=await r.json();alert('FaceFusion: '+(d.facefusion?'جاهز':'غير مثبت')+'\nReal-ESRGAN: '+(d.realesrgan?'جاهز':'عبر FaceFusion/غير مضبوط')+'\nOllama: '+(d.ollama?'جاهز':'غير مضبوط')+'\nComfyUI: '+(d.comfyui?'جاهز':'غير مضبوط'))}catch(e){alert(e.message)}};
 
