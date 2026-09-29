@@ -82,6 +82,11 @@ def facefusion_faceswap(
         raise RuntimeError("Python غير متاح.")
 
     processors = ["face_swapper"]
+    if quality in {"high", "ultra"}:
+        processors.append("face_enhancer")
+    if quality == "ultra":
+        processors.append("frame_enhancer")
+
     cmd = [python, str(entry), "headless-run", "-s", str(source), "-t", str(target), "-o", str(output)]
     cmd += ["--processors", *processors]
     cmd += [
@@ -97,7 +102,6 @@ def facefusion_faceswap(
     ]
 
     if quality in {"high", "ultra"}:
-        cmd += ["--processors", "face_swapper", "face_enhancer"]
         cmd += [
             "--face-enhancer-model", "gpen_bfr_2048",
             "--face-enhancer-blend", "86",
@@ -105,7 +109,6 @@ def facefusion_faceswap(
         ]
 
     if quality == "ultra":
-        cmd += ["--processors", "face_swapper", "face_enhancer", "frame_enhancer"]
         cmd += [
             "--frame-enhancer-model", "real_esrgan_x4_fp16",
             "--frame-enhancer-blend", "82",
